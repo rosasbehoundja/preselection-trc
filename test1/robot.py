@@ -4,7 +4,8 @@ import math
 
 class Robot(ABC):
     """
-    Abstract class for robot.
+    Abstract base class for all robot types.
+    This class defines the basic properties and methods that all robot types should implement.
     """
 
     MAX_BATTERY = 100
@@ -20,7 +21,7 @@ class Robot(ABC):
             is_active: bool = True
     ) -> None:
         """
-        Initialisation function
+        Initialize a Robot instance.
 
         Args:
             name (str): Robot's name
