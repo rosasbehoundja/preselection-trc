@@ -51,11 +51,6 @@ class Robot(ABC):
         return self._name
     
     @property
-    @abstractmethod
-    def position(self) -> Tuple:
-        return (self._x, self._y)
-    
-    @property
     def battery_level(self) -> int:
         return self._battery_level
     
@@ -79,6 +74,11 @@ class Robot(ABC):
             bool: True if robot moves successfully.
         """
         pass
+
+    @abstractmethod
+    def position(self) -> Tuple:
+        """Get the current position of the robot."""
+        return (self._x, self._y)
 
     @abstractmethod
     def get_distance_to(self, target_x: float, target_y: float) -> float:
