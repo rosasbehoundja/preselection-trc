@@ -1,0 +1,27 @@
+classDiagram
+    class Robot {
+        <<Abstract>>
+        +id: int | str
+        +name: str
+        +position: Tuple[float, float]
+        +orientation: float
+        +energy_source: str
+        +generator_level: int
+        +is_active: bool
+        +move(direction, distance)*
+        +rotate(angle)*
+        +stop()*
+        +recharge()*
+        +status()*
+    }
+
+    class WheeledRobot {
+        +drive(speed, duration)
+    }
+
+    class RoboticArm {
+        +pick(item)
+    }
+
+    Robot <|-- WheeledRobot
+    Robot <|-- RoboticArm
