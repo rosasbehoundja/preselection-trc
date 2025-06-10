@@ -1,2 +1,8 @@
 # virtual environment
 +.venv/
+
+# Cache Folder
+__pycache__/
+
+TODO/
+test1/
