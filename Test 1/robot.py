@@ -146,13 +146,6 @@ class Robot(ABC):
         pass
 
     @abstractmethod
-    def recharge(self) -> None:
-        """
-        Recharge the robot's energy source.
-        """
-        pass
-
-    @abstractmethod
     def status(self) -> str:
         """
         Get the current status of the robot.
