@@ -191,13 +191,6 @@ class Robot(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def recharge(self) -> None:
-        """
-        Recharge the robot's energy source.
-        """
-        raise NotImplementedError
-
-    @abstractmethod
     def status(self) -> str:
         """
         Get the current status of the robot.
@@ -207,7 +200,7 @@ class Robot(ABC):
         """
         return (f"Robot(ID: {self.id}, Name: {self.name}, Position: {self.position}, "
                 f"Orientation: {self.orientation}, Energy Source: {self.energy_source}, "
-                f"Active: {self.is_active})")
+                f"Active: {self.is_active}), Generator Level: {self.generator_level}")
     
     @abstractmethod
     def distance_to(self, *args: float) -> float:
@@ -234,27 +227,6 @@ class Robot(ABC):
             raise ValueError("Energy consumption must be positive.")
         self._battery_level -= amount
         self._logger.info(f"Consumed {amount} energy. Battery level is now {self._battery_level}.")
-
-    def recharge(self, amount: float) -> None:
-        """
-        Recharge the robot's battery.
-        
-        Args:
-            amount (float): The amount of energy to recharge.
-        """
-        if not self._is_active:
-            self._logger.warning("Robot is inactive, cannot recharge.")
-            return
-        if amount < 0:
-            raise ValueError("Recharge amount must be positive.")
-        self._battery_level += amount
-        if self._battery_level > 100:
-            self._battery_level = 100
-        self._logger.info(f"Recharged {amount} energy. Battery level is now {self._battery_level}.")
-        if self._battery_level <= 0:
-            self._is_active = False
-            self._logger.warning("Battery depleted: robot deactivated.")
-        self._logger.info(f"Robot {self.name} is now {'active' if self.is_active else 'inactive'}.")
 
     def add_sensor(self, sensor: Any) -> None:
         """

@@ -24,6 +24,9 @@ class WheeledRobot(Robot):
     def status(self):
         return super().status()
     
+    def distance_to(self, *args):
+        return super().distance_to(*args)
+    
     # Additional methods specific to WheeledRobot
     def drive(self, speed: float, duration: float) -> None:
         """
