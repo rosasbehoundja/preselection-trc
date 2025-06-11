@@ -4,12 +4,6 @@
 
 The `Robot` class is an abstract base class (ABC) that defines the common interface and core functionalities for all robot types within the simulation environment. It handles fundamental attributes like identity, position, orientation, energy, and basic actions. Being an ABC, it cannot be instantiated directly; instead, concrete robot classes must inherit from it and implement its abstract methods.
 
-* Managing identity, position, and orientation.
-* Tracking energy source and generator level.
-* Maintaining activation status and sensor attachments.
-* Defining abstract motion methods (`move`, `rotate`, `stop`, `status`) that must be implemented by subclasses.
-
-
 ## Class Variables
 
 ### `ENERGY_SOURCE`
