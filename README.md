@@ -1,0 +1,6 @@
+# TEKBOT ROBOTIC CHALLENGE PRESELECTION TESTS
+
+
+**Team**: IFRI
+
+**Department**: IT (ROS & AI)
