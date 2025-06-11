@@ -1,4 +1,4 @@
-from robot import Robot
+from .robot import Robot
 
 from typing import Tuple, List, Any
 from enum import Enum
