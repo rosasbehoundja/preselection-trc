@@ -11,7 +11,6 @@ class RoboticArm(Robot):
 
     def __init__(
             self,
-            id: Union[int, str],
             name: str,
             position: Tuple[float, float],
             orientation: float,
@@ -21,7 +20,7 @@ class RoboticArm(Robot):
         """
         Initialize the robotic arm with the given parameters.
         """
-        super().__init__(id, name, position, orientation, energy_source)
+        super().__init__(name=name, position=position, orientation=orientation, energy_source=energy_source)
         if not isinstance(num_joints, int) or num_joints < 2:
             raise ValueError("A robotic arm must have at least 2 joints.")
         self._joint_angles: List[float] = [0.0] * num_joints  # Angles in degrees

@@ -1,123 +1,11 @@
-from robot import Robot  # On suppose que Robot définit bien battery_level, _check_active(), consume_energy(), status_base(), etc.
+from robot import Robot
 
-from abc import ABC, abstractmethod
-from typing import Tuple, List, Any, Optional
+from typing import Tuple, List, Any
+from enum import Enum
 import math
-import logging
-import time
 
 
-class Sensor(ABC):
-    """
-    Interface de base pour capteurs de distance/obstacle.
-    Chaque capteur doit implémenter read() retournant une distance en mètres.
-    """
-    @abstractmethod
-    def read(self) -> float:
-        """
-        Lire la mesure actuelle (distance). 
-        Retourne un float (distance en m); on peut renvoyer float('inf') si pas d'obstacle.
-        """
-        pass
-
-
-class UltrasonicSensor(Sensor):
-    """
-    Stub d'un capteur ultrason. 
-    En simulation, on peut injecter une fonction de génération de données.
-    """
-    def __init__(self, get_distance_func: Optional[Any] = None):
-        # get_distance_func: callable renvoyant float en simulation ou None
-        self._get_distance = get_distance_func
-
-    def read(self) -> float:
-        if self._get_distance:
-            try:
-                dist = self._get_distance()
-                # On s'assure que c'est un float ou None
-                if dist is None:
-                    return float('inf')
-                return float(dist)
-            except Exception:
-                return float('inf')
-        # Par défaut, absence d'obstacle simulée
-        return float('inf')
-
-
-class Storage:
-    """
-    Gère le bac à cubes embarqué.
-    """
-    def __init__(self, capacity: int):
-        if capacity <= 0:
-            raise ValueError("Storage capacity must be positive.")
-        self._capacity = capacity
-        self._content: List[Any] = []
-
-    def add(self, cube_info: Any) -> bool:
-        """Ajoute cube_info si pas plein. Retourne True si réussi, False sinon."""
-        if self.is_full():
-            return False
-        self._content.append(cube_info)
-        return True
-
-    def clear(self):
-        """Vide le bac (après tri)."""
-        self._content.clear()
-
-    def is_full(self) -> bool:
-        return len(self._content) >= self._capacity
-
-    def count(self) -> int:
-        return len(self._content)
-
-    def get_all(self) -> List[Any]:
-        """Retourne la liste des cubes stockés."""
-        return list(self._content)
-
-
-class ArmInterface(ABC):
-    """
-    Interface du bras robotisé embarqué.
-    Le RobotMobile appelle ces méthodes pour coordonner la prise.
-    """
-    @abstractmethod
-    def detect_cube(self) -> Optional[Tuple[float, float]]:
-        """
-        Tente de localiser un cube dans le repère du robot mobile.
-        Retourne la position relative (x, y) du cube si détecté, sinon None.
-        """
-        pass
-
-    @abstractmethod
-    def pick(self, cube_position: Tuple[float, float]) -> bool:
-        """
-        Tente de saisir le cube à la position donnée (relative).
-        Retourne True si succès, False sinon.
-        """
-        pass
-
-    @abstractmethod
-    def place_into_storage(self) -> bool:
-        """
-        Commande le bras pour déposer le cube saisi dans le bac du mobile.
-        Retourne True si succès.
-        """
-        pass
-
-
-class SimplePlanner:
-    """
-    Stub de planificateur de trajectoire sur grille/simplifié.
-    Ici, on considère que le path est une liste de waypoints (x,y).
-    En simulation simple, on retourne directement [target].
-    """
-    def compute_path(self, start: Tuple[float, float], goal: Tuple[float, float]) -> List[Tuple[float, float]]:
-        # Implémentation simplifiée : aller directement au goal
-        return [goal]
-
-
-class State:
+class State(Enum):
     IDLE = "IDLE"
     NAVIGATING = "NAVIGATING"
     AVOIDING = "AVOIDING"
@@ -128,216 +16,174 @@ class State:
     SHUTDOWN = "SHUTDOWN"
 
 
-class RobotMobile(Robot):
+class WheeledRobot(Robot):
     """
-    Implémentation d'un robot mobile :
-    - Navigation / déplacement
-    - Détection et évitement d'obstacles
-    - Stockage de cubes
-    - Coordination avec un bras robotisé (ArmInterface)
-    - Gestion d'énergie et machine à états
+    A class representing a mobile robot with wheels, capable of navigation, obstacle avoidance,
+    and interaction with a robotic arm for picking up and storing objects.
     """
     def __init__(
         self,
-        id: Any,
         name: str,
         position: Tuple[float, float],
         orientation: float,
         energy_source: str,
         wheel_base: float,
         storage_capacity: int,
-        arm: ArmInterface,
-        sensors: Optional[List[Sensor]] = None,
     ) -> None:
-        # Appel de la classe de base ; on suppose que Robot gère battery_level, is_active, etc.
-        super().__init__(id=id, name=name, position=position, orientation=orientation, energy_source=energy_source)
+        """
+        Initialize the mobile robot with the given parameters.
 
-        # Paramètres châssis
-        if wheel_base <= 0:
-            raise ValueError("wheel_base must be positive.")
-        self._wheel_base = float(wheel_base)  # écart entre roues (m)
-        self._v_lin_cmd = 0.0  # consigne vitesse linéaire
-        self._v_ang_cmd = 0.0  # consigne vitesse angulaire
+        Args:
+            name (str): Name of the robot.
+            position (Tuple[float, float]): Initial position (x, y) in meters.
+            orientation (float): Initial orientation in radians.
+            energy_source (str): Type of energy source (e.g., "battery").
+            wheel_base (float): Distance between the wheels in meters.
+            storage_capacity (int): Maximum number of items the robot can store.
 
-        # Stockage
-        self._storage = Storage(storage_capacity)
-        # Bras robotisé (injection) : on suppose implémentation d'ArmInterface
-        self._arm = arm
+        Raises:
+            ValueError: If wheel_base is not positive and storage_capacity is not positive.
+        """
+        super().__init__(name=name, position=position, orientation=orientation, energy_source=energy_source)
 
-        # Capteurs d'obstacle
-        self._sensors = sensors or []
+        if not isinstance(wheel_base, (int, float)) or wheel_base <= 0:
+            raise ValueError("wheel_base must be a positive number.")
+        if not isinstance(storage_capacity, int) or storage_capacity <= 0:
+            raise ValueError("storage_capacity must be a positive integer.")
+        
+        self._wheel_base = float(wheel_base)
+        self._v_lin_cmd = 0.0 # Linear speed command (m/s)
+        self._v_ang_cmd = 0.0 # Angular speed command (rad/s)
 
-        # Planner
-        self._planner = SimplePlanner()
+        self._stockage_capacity = storage_capacity
+        self._storage_bag = []
 
-        # État interne
         self._state = State.IDLE
+        self._obstacle_threshold = 0.3 # Min distance to consider an obstacle (meters)
 
-        # Seuils
-        self._obstacle_threshold = 0.3  # m : distance minimale d'arrêt
-        self._battery_low_threshold = 20.0  # %
-        # Logger
-        self._logger = logging.getLogger(self.__class__.__name__)
-        if not self._logger.handlers:
-            handler = logging.StreamHandler()
-            fmt = logging.Formatter("[%(levelname)s][%(name)s] %(message)s")
-            handler.setFormatter(fmt)
-            self._logger.addHandler(handler)
-        self._logger.setLevel(logging.INFO)
+    # Properties for the mobile robot
+    @property
+    def wheel_base(self) -> float:
+        """Get the wheel base of the robot."""
+        return self._wheel_base
+    
+    @property
+    def storage_capacity(self) -> int:
+        """Get the storage capacity of the robot."""
+        return self._stockage_capacity
+    
+    @property
+    def state(self) -> State:
+        """Get the current state of the robot."""
+        return self._state
+    
+    @property
+    def storage_bag(self) -> List[Any]:
+        """Get the current storage bag."""
+        return self._storage_bag.copy()
+    
+    @property
+    def obstacle_threshold(self) -> float:
+        """Get the obstacle detection threshold."""
+        return self._obstacle_threshold
+    
+    @property
+    def v_lin_cmd(self) -> float:
+        """Get the current linear speed command."""
+        return self._v_lin_cmd
 
-        # Temps pour simulation (inutile si on ne gère pas dt ailleurs)
-        self._last_time = time.time()
+    @property
+    def v_ang_cmd(self) -> float:
+        """Get the current angular speed command."""
+        return self._v_ang_cmd
+    
+    @state.setter
+    def state(self, new_state: State) -> None:
+        """Set the current state of the robot."""
+        if not isinstance(new_state, State):
+            raise ValueError("state must be an instance of State Enum.")
+        self._state = new_state
+        self._logger.info(f"State changed to {self._state.value}")
 
-    # ---------- Méthodes bas-niveau moteurs / capteurs ----------
+    @storage_bag.setter
+    def storage_bag(self, item: Any) -> None:
+        """Add an item to the storage bag."""
+        if len(self._storage_bag) >= self._stockage_capacity:
+            raise ValueError("Storage bag is full.")
+        self._storage_bag.append(item)
+        self._logger.info(f"Item added to storage bag. Current count: {len(self._storage_bag)}")
 
-    def set_motor_speeds(self, left: float, right: float) -> None:
+    @obstacle_threshold.setter
+    def obstacle_threshold(self, threshold: float) -> None:
+        """Set the obstacle detection threshold."""
+        if not isinstance(threshold, (int, float)) or threshold <= 0:
+            raise ValueError("obstacle_threshold must be a positive number.")
+        self._obstacle_threshold = float(threshold)
+        self._logger.info(f"Obstacle threshold set to {self._obstacle_threshold:.2f} meters")
+    
+
+    # Motors and sensors
+    def set_motor_speed(self, left: float, right: float) -> None:
         """
-        Commande les moteurs gauche/droite.
-        En simulation simple, on convertit en v_lin_cmd et v_ang_cmd.
+        Define motors speeds for left and right wheels.
+
+        Args:
+            left (float): Speed for the left wheel (m/s).
+            right (float): Speed for the right wheel (m/s).
+        Raises:
+            ValueError: If left or right speed is not a number.
         """
-        # v = (left + right)/2 ; omega = (right - left)/wheel_base
+        if not isinstance(left, (int, float)):
+            raise ValueError("left speed must be a number.")
+        if not isinstance(right, (int, float)):
+            raise ValueError("right speed must be a number.")
+
         self._v_lin_cmd = (left + right) / 2.0
-        self._v_ang_cmd = (right - left) / self._wheel_base
-        self._logger.info(f"Motors set: left={left:.2f}, right={right:.2f}")
-
-    def stop_motors(self) -> None:
-        """Arrête les moteurs immédiatement."""
-        self._v_lin_cmd = 0.0
-        self._v_ang_cmd = 0.0
-        self._logger.info("Motors stopped.")
-
-    def read_sensors(self) -> List[float]:
-        """
-        Lit chaque capteur et retourne la liste des distances.
-        """
-        dists = []
-        for sensor in self._sensors:
-            try:
-                d = sensor.read()
-                if d is None:
-                    d = float('inf')
-                dists.append(d)
-            except Exception as e:
-                self._logger.warning(f"Sensor read error: {e}")
-        return dists
-
-    # ---------- Consommation d'énergie ----------
-
-    def _consume_for_motion(self, distance: float) -> None:
-        """
-        Consommation proportionnelle à la distance parcourue.
-        Ici, un facteur arbitraire, à ajuster.
-        """
-        amount = abs(distance) * 0.5  # ex. 0.5% par mètre
-        # On suppose que Robot a une méthode consume_energy(amount)
-        self.consume_energy(amount)
-
-    def _consume_for_rotation(self, angle: float) -> None:
-        """
-        Consommation proportionnelle à la rotation.
-        """
-        amount = abs(angle) * 2.0  # ex. 2% par radian
-        self.consume_energy(amount)
-
-    # ---------- Implémentation des méthodes abstraites Robot ----------
+        self._v_ang_cmd = (right - left) / self.wheel_base
+        self._logger.info(f"Motors set: v={self._v_lin_cmd:.2f}, ω={self._v_ang_cmd:.2f}")
 
     def move(self, direction: str, distance: float) -> None:
-        """
-        Déplace le robot dans la direction donnée d'une certaine distance.
-        direction: 'forward' ou 'backward' 
-        """
-        # Vérifier actif et batterie via base (on suppose Robot implémente _check_active ou similaire)
-        try:
-            self._check_active()  # ou: if not self.is_active: raise RuntimeError
-        except AttributeError:
-            # Si la classe de base ne définit pas _check_active, on vérifie is_active et battery_level
-            if not self.is_active:
-                raise RuntimeError("Robot inactive.")
-            if getattr(self, "battery_level", None) is not None and self.battery_level <= 0:
-                raise RuntimeError("Battery depleted.")
-
-        if distance <= 0:
+        if not self.is_active:
+            self._logger.warning("Cannot move: Robot is inactive.")
             return
+        if not isinstance(distance, (int, float)):
+            raise ValueError("distance must be a number.")
+        if distance < 0:
+            raise ValueError("distance must be a non-negative number.")
 
-        # Orientation: 0 rad = axe x positif. 'forward' avance dans orientation courante.
-        # 'backward' avance dans orientation + pi.
-        if direction not in ("forward", "backward"):
-            raise ValueError("move direction must be 'forward' or 'backward'")
+        if direction not in ["forward", "backward"]:
+            self._logger.error("Invalid move direction. Use 'forward', 'backward'")
+            raise ValueError("move direction must be 'forward', 'backward'.")
 
         angle = self._orientation if direction == "forward" else self._orientation + math.pi
-        # Calcul de la nouvelle position
+
+        # Compute new position based on distance and angle
         dx = distance * math.cos(angle)
         dy = distance * math.sin(angle)
-        new_pos = (self._position[0] + dx, self._position[1] + dy)
+        new_position = (self.position[0] + dx, self.position[1] + dy)
 
-        # Consommation
         self._consume_for_motion(distance)
+        self.position = new_position
 
-        # Mise à jour
-        self._position = new_pos
-        self._logger.info(f"Moved {direction} by {distance:.2f}m to {self._position}")
-
-        # Vérifier batterie basse (on suppose propriété battery_level existe)
-        if getattr(self, "battery_level", None) is not None and self.battery_level <= self._battery_low_threshold:
-            self._logger.warning("Battery low after move.")
-            # La machine à états ou appelant pourra gérer le retour ou mode économie
-
-        self._last_time = time.time()
+        self._logger.info(f"Moved {direction} by {distance:.2f}m to {self.position}")
 
     def rotate(self, angle: float) -> None:
-        """
-        Tourne le robot de 'angle' radians (positif = sens anti-horaire).
-        """
-        try:
-            self._check_active()
-        except AttributeError:
-            if not self.is_active:
-                raise RuntimeError("Robot inactive.")
-            if getattr(self, "battery_level", None) is not None and self.battery_level <= 0:
-                raise RuntimeError("Battery depleted.")
+        if not self.is_active:
+            self._logger.warning("Cannot rotate: Robot is inactive.")
+            return
 
-        # Normaliser orientation
-        new_ori = (self._orientation + angle) % (2 * math.pi)
-
-        # Consommation
         self._consume_for_rotation(angle)
-
-        self._orientation = new_ori
-        self._logger.info(f"Rotated by {angle:.2f} rad to orientation {self._orientation:.2f}")
-
-        if getattr(self, "battery_level", None) is not None and self.battery_level <= self._battery_low_threshold:
-            self._logger.warning("Battery low after rotate.")
-
-        self._last_time = time.time()
+        self.orientation = angle
 
     def stop(self) -> None:
-        """
-        Arrête tout mouvement : ici on met les consignes à zéro.
-        """
-        try:
-            self._check_active()
-        except AttributeError:
-            if not self.is_active:
-                raise RuntimeError("Robot inactive.")
-        self.stop_motors()
+        if not self.is_active:
+            self._logger.warning("Cannot stop: Robot is inactive.")
+            return
+        
+        self._v_lin_cmd = 0.0
+        self._v_ang_cmd = 0.0
+        self.is_active = False
         self._logger.info("Robot stopped.")
-
-    def status(self) -> str:
-        """
-        Renvoie une description textuelle brève du statut du robot mobile.
-        On suppose que Robot de base a status_base() ou équivalent pour la partie générique.
-        """
-        base = ""
-        if hasattr(super(), "status_base"):
-            base = super().status_base()
-        else:
-            # fallback minimal
-            base = f"Robot(ID={self.id}, Pos={self._position}, Ori={self._orientation:.2f})"
-        storage_info = f"Storage: {self._storage.count()}/{self._storage._capacity}"
-        state_info = f"State: {self._state}"
-        return f"{base} | {storage_info} | {state_info}"
-
-    # ---------- Navigation & évitement ----------
 
     def detect_obstacle(self) -> bool:
         """
@@ -479,74 +325,27 @@ class RobotMobile(Robot):
         self._logger.info("Returning to sorting zone.")
         return self.navigate_to(sort_zone_pos)
 
-    # ---------- Exemple de boucle de haute-niveau (orchestrateur) ----------
-
-    def run_collection_cycle(self, collection_points: List[Tuple[float, float]], sort_zone_pos: Tuple[float, float]):
+    # Protected methods for internal use
+    def _consume_for_motion(self, distance: float) -> None:
         """
-        Exécution simplifiée d'un cycle de collecte :
-        - Parcourt une liste de positions probables de cubes (ou zones)
-        - Pour chaque position, navigue, prépare le pickup, appelle le bras, met à jour stockage.
-        - Si stockage plein ou batterie faible, revient à sort_zone_pos, vide stockage, puis peut redémarrer.
+        Consume energy proportionally to the distance moved.
+        Args:
+            distance (float): Distance moved in meters.
+        Raises:
+            ValueError: If distance is not a number or is not positive.
         """
-        self._state = State.NAVIGATING
-        for pt in collection_points:
-            # Vérifier actif et batterie
-            if not self.is_active or (hasattr(self, "battery_level") and self.battery_level <= self._battery_low_threshold):
-                self._logger.info("Stopping collection cycle: inactive or battery low.")
-                break
+        if not isinstance(distance, (int, float)):
+            raise ValueError("distance must be a number.")
+        if distance <= 0:
+            self._logger.warning("Distance must be positive for energy consumption.")
+            return
+        
+        amount = abs(distance) * 0.5 # 0.5% per meter
+        self.consume_energy(amount)
 
-            # Navigation vers pt
-            success_nav = self.navigate_to(pt)
-            if not success_nav:
-                self._logger.info(f"Cannot reach collection point {pt}. Skipping.")
-                continue
-
-            # Préparation pour pickup
-            self._state = State.WAITING_FOR_ARM
-            ok_pos = self.prepare_for_pickup(pt)
-            if not ok_pos:
-                continue
-
-            # Demande au bras de détecter et saisir
-            picked = False
-            try:
-                cube_rel = self._arm.detect_cube()  # position relative ou None
-                if cube_rel is not None:
-                    picked = self._arm.pick(cube_rel)
-                else:
-                    self._logger.info("Arm did not detect cube at expected location.")
-            except Exception as e:
-                self._logger.warning(f"Arm interface error: {e}")
-
-            if picked:
-                # Déposer dans le bac
-                try:
-                    placed = self._arm.place_into_storage()
-                except Exception as e:
-                    self._logger.warning(f"Arm placement error: {e}")
-                    placed = False
-                if placed:
-                    self.add_cube_to_storage({"position": pt})
-                else:
-                    self._logger.warning("Failed to place cube into storage.")
-            else:
-                self._logger.info("Pickup failed or no cube.")
-
-            # Vérifier stockage / batterie
-            if self.is_storage_full() or (hasattr(self, "battery_level") and self.battery_level <= self._battery_low_threshold):
-                self._logger.info("Storage full or battery low, returning to sort zone.")
-                break
-
-            self._state = State.NAVIGATING
-
-        # Retour au tri
-        self._state = State.RETURNING
-        ret = self.return_to_sorting_zone(sort_zone_pos)
-        if ret:
-            self._logger.info("Arrived at sorting zone.")
-            self._storage.clear()
-            self._logger.info("Storage cleared after sorting.")
-        else:
-            self._logger.warning("Failed to return to sorting zone.")
-        self._state = State.IDLE
-        self._logger.info("Collection cycle completed.")
+    def _consume_for_rotation(self, angle: float) -> None:
+        """
+        Consume energy proportionally to the rotation.
+        """
+        amount = abs(angle) * 0.002  # ex. 0.002% per degrees
+        self.consume_energy(amount)

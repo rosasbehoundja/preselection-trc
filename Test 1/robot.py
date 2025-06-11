@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Union, Tuple, Any, List
 import logging
 import math
+import uuid
 
 
 class Robot(ABC):
@@ -10,10 +11,11 @@ class Robot(ABC):
     """
     # Class variable to define valid energy sources
     ENERGY_SOURCE = ["solar", "fossil_fuel", "electric"]
+    # Threshold for low battery warning
+    LOW_BATTERY_THRESHOLD = 20
 
     def  __init__(
             self,
-            id: Union[int, str],
             name: str,
             position: Tuple[float, float],
             orientation: float,
@@ -23,7 +25,6 @@ class Robot(ABC):
         Initialize a Robot instance.
         
         Args:
-            id (Union[int, str]): Unique identifier for the robot.
             name (str): Name of the robot.
             position (Tuple[float, float]): The (x, y) coordinates of the robot's position.
             orientation (float): The orientation of the robot in degrees.
@@ -39,8 +40,6 @@ class Robot(ABC):
             ValueError: If the energy source is not in the ENERGY_SOURCE list.
         """
         # Validate input types
-        if not isinstance(id, (int, str)):
-            raise TypeError("ID must be an integer or a string.")
         if not isinstance(name, str):
             raise TypeError("Name must be a string.")
         if not isinstance(position, tuple) or len(position) != 2 or not all(isinstance(coord, (int, float)) for coord in position):
@@ -49,15 +48,15 @@ class Robot(ABC):
             raise TypeError("Orientation must be a numeric value (in radians).")
         if energy_source.lower() not in self.ENERGY_SOURCE:
             raise ValueError("Energy source must be an instance of ENERGY_SOURCE List.")
-        
-        self._id = id
+
+        self._id = uuid.uuid4()  # Generate a unique ID
         self._name = name
         self._position = position
         self._orientation = orientation
         self._energy_source = energy_source
 
         # Indicates if the robot is currently active
-        self._is_active = True
+        self._is_active = False
 
         # Generator power level
         self._generator_level = 100
@@ -160,6 +159,12 @@ class Robot(ABC):
             self._logger.info("Robot deactivated.")
 
         self._is_active = active
+
+    @sensors.setter
+    def sensors(self, new_sensor: Any) -> None:
+        """Set a new list of sensors for the robot."""
+        self._sensors.append(new_sensor)
+        self._logger.info(f"Sensors updated: {self._sensors}")
     
     # Abstract methods to be implemented by subclasses
     @abstractmethod
@@ -168,7 +173,7 @@ class Robot(ABC):
         Move the robot in a specified direction by a certain distance.
         
         Args:
-            direction (str): The direction to move ('forward', 'backward', 'left', 'right').
+            direction (str): The direction to move ('forward', 'backward').
             distance (float): The distance to move in the specified direction.
         """
         raise NotImplementedError
@@ -285,7 +290,6 @@ class Robot(ABC):
             bool: True if the IDs are the same, False otherwise.
         """
         if not isinstance(other, Robot):
-            return NotImplemented
+            raise TypeError("Comparison is only supported between Robot instances.")
         return self.id == other.id
-    
     
