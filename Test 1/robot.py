@@ -1,251 +1,319 @@
 from abc import ABC, abstractmethod
-from typing import Union, Tuple, List, Any
+from typing import Union, Tuple, Any, List
 import logging
+import math
+
 
 class Robot(ABC):
     """
     Abstract base class representing a robot in a simulation environment.
     """
+    # Class variable to define valid energy sources
+    ENERGY_SOURCE = ["solar", "fossil_fuel", "electric"]
 
-    # Sources d'énergie valides
-    ENERGY_SOURCES = {"solar", "fossil_fuel", "electric"}
+    def  __init__(
+            self,
+            id: Union[int, str],
+            name: str,
+            position: Tuple[float, float],
+            orientation: float,
+            energy_source: str,
+        ) -> None:
+        """
+        Initialize a Robot instance.
+        
+        Args:
+            id (Union[int, str]): Unique identifier for the robot.
+            name (str): Name of the robot.
+            position (Tuple[float, float]): The (x, y) coordinates of the robot's position.
+            orientation (float): The orientation of the robot in degrees.
+            energy_source (str): The energy source used by the robot, must be one of the ENERGY_SOURCE list.
 
-    def __init__(
-        self,
-        id: Union[int, str],
-        name: str,
-        position: Tuple[float, float],
-        orientation: float,
-        energy_source: str,
-    ) -> None:
-        # Validation types
+        ENERGY_SOURCE is a list of valid energy sources:
+            - "solar"
+            - "fossil_fuel"
+            - "electric"
+
+        Raises:
+            TypeError: If any of the parameters are of incorrect type.
+            ValueError: If the energy source is not in the ENERGY_SOURCE list.
+        """
+        # Validate input types
         if not isinstance(id, (int, str)):
             raise TypeError("ID must be an integer or a string.")
         if not isinstance(name, str):
             raise TypeError("Name must be a string.")
-        if (
-            not isinstance(position, tuple)
-            or len(position) != 2
-            or not all(isinstance(coord, (int, float)) for coord in position)
-        ):
+        if not isinstance(position, tuple) or len(position) != 2 or not all(isinstance(coord, (int, float)) for coord in position):
             raise TypeError("Position must be a tuple of two numeric values (x, y).")
         if not isinstance(orientation, (int, float)):
             raise TypeError("Orientation must be a numeric value (in radians).")
-        if energy_source.lower() not in self.ENERGY_SOURCES:
-            raise ValueError(f"Energy source must be one of {self.ENERGY_SOURCES}.")
-
+        if energy_source.lower() not in self.ENERGY_SOURCE:
+            raise ValueError("Energy source must be an instance of ENERGY_SOURCE List.")
+        
         self._id = id
         self._name = name
-        self._position = (float(position[0]), float(position[1]))
-        self._orientation = float(orientation)
-        self._energy_source = energy_source.lower()
+        self._position = position
+        self._orientation = orientation
+        self._energy_source = energy_source
 
-        # État général
+        # Indicates if the robot is currently active
         self._is_active = True
-        # Niveaux d'énergie
-        self._battery_level = 100.0  # en pourcentage
-        # Optionnel : si modéliser un générateur distinct, on peut garder _generator_level séparé
 
-        # Capteurs attachés
+        # Generator power level
+        self._generator_level = 100
+
+        # List to hold sensors attached to the robot
         self._sensors: List[Any] = []
 
-        # Pour logging
-        self._logger = logging.getLogger(self.__class__.__name__)
-        if not self._logger.handlers:
-            # Configuration basique si non configurée ailleurs
-            handler = logging.StreamHandler()
-            formatter = logging.Formatter("[%(levelname)s][%(name)s] %(message)s")
-            handler.setFormatter(formatter)
-            self._logger.addHandler(handler)
-            self._logger.setLevel(logging.INFO)
-
-        # Dernier temps de mise à jour (pour simulation temporelle si besoin)
-        # import time
-        # self._last_update = time.time()
-
-    # ---------- Propriétés ----------
-
+        # Setup logging
+        self._logger = logging.getLogger(__name__)
+        self._logger.setLevel(logging.INFO)
+        handler = logging.StreamHandler()
+        handler.setLevel(logging.INFO)
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        handler.setFormatter(formatter)
+        self._logger.addHandler(handler)
+    
+    # Properties to access robot attributes
     @property
     def id(self) -> Union[int, str]:
+        """Get the unique identifier of the robot."""
         return self._id
-
+    
     @property
     def name(self) -> str:
+        """Get the name of the robot."""
         return self._name
-
+    
     @property
     def position(self) -> Tuple[float, float]:
+        """Get the current position of the robot."""
         return self._position
-
-    @position.setter
-    def position(self, new_position: Tuple[float, float]) -> None:
-        if (
-            not isinstance(new_position, tuple)
-            or len(new_position) != 2
-            or not all(isinstance(coord, (int, float)) for coord in new_position)
-        ):
-            raise TypeError("Position must be a tuple of two numeric values (x, y).")
-        self._position = (float(new_position[0]), float(new_position[1]))
-
+    
     @property
     def orientation(self) -> float:
+        """Get the current orientation of the robot in radians."""
         return self._orientation
-
-    @orientation.setter
-    def orientation(self, new_orientation: float) -> None:
-        if not isinstance(new_orientation, (int, float)):
-            raise TypeError("Orientation must be numeric (radians).")
-        # On peut normaliser dans [0, 2π)
-        import math
-        self._orientation = float(new_orientation) % (2 * math.pi)
-
+    
     @property
     def energy_source(self) -> str:
+        """Get the energy source of the robot."""
         return self._energy_source
-
-    @energy_source.setter
-    def energy_source(self, src: str) -> None:
-        if not isinstance(src, str) or src.lower() not in self.ENERGY_SOURCES:
-            raise ValueError(f"Energy source must be one of {self.ENERGY_SOURCES}.")
-        self._energy_source = src.lower()
-
+    
     @property
-    def battery_level(self) -> float:
-        return self._battery_level
-
-    @battery_level.setter
-    def battery_level(self, new_level: float) -> None:
-        if not isinstance(new_level, (int, float)):
-            raise TypeError("Battery level must be numeric.")
-        if not (0.0 <= new_level <= 100.0):
-            raise ValueError("Battery level must be between 0 and 100.")
-        self._battery_level = float(new_level)
-        if self._battery_level <= 0:
-            self._is_active = False
-            self._logger.warning("Battery depleted: robot deactivated.")
-
+    def generator_level(self) -> int:
+        """Get the current generator level of the robot."""
+        return self._generator_level
+    
     @property
     def is_active(self) -> bool:
+        """Check if the robot is currently active."""
         return self._is_active
+    
+    @property
+    def sensors(self) -> List[Any]:
+        """Get the list of sensors attached to the robot."""
+        return self._sensors
+    
+    # Setters to modify robot attributes
+    @position.setter
+    def position(self, new_position: Tuple[float, float]) -> None:
+        """Set a new position for the robot."""
+        if not isinstance(new_position, tuple) or len(new_position) != 2 or not all(isinstance(coord, (int, float)) for coord in new_position):
+            raise TypeError("Position must be a tuple of two numeric values (x, y).")
+        self._position = new_position
+        self._logger.info(f"Position updated to {self._position}")
+    
+    @orientation.setter
+    def orientation(self, new_orientation: float) -> None:
+        """Set a new orientation for the robot."""
+        if not isinstance(new_orientation, (int, float)):
+            raise TypeError("Orientation must be numeric (degrees).")
+        
+        # Make sure the orientation is within [0, 360) degrees
+        if new_orientation < 0 or new_orientation >= 360:
+            new_orientation = new_orientation % 360
+        # Normalize orientation to be within [0, 2π)
+        radian_orientation = math.radians(new_orientation)
+        self._orientation = math.fmod(radian_orientation, 2 * math.pi)
+        self._logger.info(f"Orientation updated to {self._orientation} radians")
+
+    @generator_level.setter
+    def generator_level(self, new_level: int) -> None:
+        """Set a new generator level for the robot."""
+        if not isinstance(new_level, int):
+            raise TypeError("Generator level must be an integer.")
+        self._generator_level = int(new_level)
+        self._logger.info(f"Generator level updated to {self._generator_level}")
 
     @is_active.setter
     def is_active(self, active: bool) -> None:
+        """Set the active status of the robot."""
+        if self._generator_level <= 0:
+            self._logger.warning("Generator level is zero, cannot set active status.")
+            return
         if not isinstance(active, bool):
             raise TypeError("is_active must be a boolean.")
-        self._is_active = active
-        if not active:
+        if active and not self._is_active:
+            self._logger.info("Robot activated.")
+        elif not active and self._is_active:
             self._logger.info("Robot deactivated.")
 
-    @property
-    def sensors(self) -> List[Any]:
-        # Retourne une copie pour éviter modification directe
-        return list(self._sensors)
-
-    # Pas de setter direct pour sensors, on fournit add/remove.
+        self._is_active = active
     
-    # ---------- Gestion énergie ----------
-
-    def _consume_energy(self, amount: float) -> None:
-        """
-        Réduit la batterie de `amount` (en pourcentage). 
-        Si batterie < 0, désactive le robot.
-        """
-        if not isinstance(amount, (int, float)):
-            raise TypeError("Energy consumption amount must be numeric.")
-        new_level = self._battery_level - float(amount)
-        self.battery_level = new_level  # passe par le setter pour gestion et logging
-
-    def _recharge(self, amount: float) -> None:
-        """
-        Recharge la batterie de `amount` (en %), sans dépasser 100.
-        Selon energy_source, on peut ajuster le taux.
-        """
-        if not isinstance(amount, (int, float)):
-            raise TypeError("Recharge amount must be numeric.")
-        new_level = min(100.0, self._battery_level + float(amount))
-        self.battery_level = new_level
-        self._logger.info(f"Battery recharged by {amount}%, new level: {self._battery_level:.1f}%")
-
-    # ---------- Capteurs ----------
-
-    def add_sensor(self, sensor: Any) -> None:
-        if sensor not in self._sensors:
-            self._sensors.append(sensor)
-            self._logger.info(f"Sensor added: {sensor}")
-
-    def remove_sensor(self, sensor: Any) -> None:
-        if sensor in self._sensors:
-            self._sensors.remove(sensor)
-            self._logger.info(f"Sensor removed: {sensor}")
-
-    # Méthode utilitaire
-    def distance_to(self, other: Tuple[float, float]) -> float:
-        import math
-        x0, y0 = self._position
-        x1, y1 = other
-        return math.hypot(x1 - x0, y1 - y0)
-
-    # Vérifie si robot peut agir
-    def _check_active(self) -> None:
-        if not self._is_active or self._battery_level <= 0:
-            raise RuntimeError("Robot is inactive or battery depleted.")
-
-    # ---------- Méthodes abstraites ----------
-
+    # Abstract methods to be implemented by subclasses
     @abstractmethod
     def move(self, direction: str, distance: float) -> None:
         """
-        Déplacer le robot dans une direction ('forward','backward','left','right') d'une certaine distance.
-        Doit appeler _check_active() et _consume_energy(...) selon la distance.
+        Move the robot in a specified direction by a certain distance.
+        
+        Args:
+            direction (str): The direction to move ('forward', 'backward', 'left', 'right').
+            distance (float): The distance to move in the specified direction.
         """
-        self._check_active()
-        # La sous-classe implémente la modification de position selon orientation et direction.
-        # Exemple pour consommation :
-        # self._consume_energy(distance * facteur)
         raise NotImplementedError
 
     @abstractmethod
     def rotate(self, angle: float) -> None:
         """
-        Tourner le robot de `angle` radians.
-        Doit appeler _check_active() et _consume_energy(...) selon l'angle.
+        Rotate the robot by a certain angle.
+
+        Args:
+            angle (float): The angle to rotate the robot, in radians.
         """
-        self._check_active()
-        # La sous-classe met à jour self.orientation
         raise NotImplementedError
 
     @abstractmethod
     def stop(self) -> None:
         """
-        Arrêter tout mouvement en cours.
+        Stop the robot's movement.
         """
-        self._check_active()
+        raise NotImplementedError
+
+    @abstractmethod
+    def recharge(self) -> None:
+        """
+        Recharge the robot's energy source.
+        """
         raise NotImplementedError
 
     @abstractmethod
     def status(self) -> str:
         """
-        Retourne une description textuelle du statut courant.
-        Peut appeler super().status_base() pour la partie générique.
+        Get the current status of the robot.
+        
+        Returns:
+            str: A string representation of the robot's current status.
         """
-        raise NotImplementedError
+        return (f"Robot(ID: {self.id}, Name: {self.name}, Position: {self.position}, "
+                f"Orientation: {self.orientation}, Energy Source: {self.energy_source}, "
+                f"Active: {self.is_active})")
+    
+    @abstractmethod
+    def distance_to(self, *args: float) -> float:
+        """
+        Calculate the distance from the robot to another point.
 
-    # Méthode de base pour status, utilisable par les sous-classes
-    def status_base(self) -> str:
-        """Partie générique du status, que les sous-classes peuvent réutiliser."""
-        return (
-            f"Robot(ID={self._id}, Name={self._name}, Pos={self._position}, "
-            f"Ori={self._orientation:.2f} rad, Battery={self._battery_level:.1f}%, "
-            f"Active={self._is_active})"
-        )
+        Args:
+            other (Tuple[float, float]): The (x, y) coordinates of the other point.
+
+        Returns:
+            float: The distance to the other point.
+        """
+        x0, y0 = self.position
+        x1, y1 = args
+        return math.hypot(x1 - x0, y1 - y0)
+
+    # Personalized methods for Robot
+    def consume_energy(self, amount: float) -> None:
+        """Consume energy from the robot's battery."""
+        if not self._is_active:
+            self._logger.warning("Robot is inactive, cannot consume energy.")
+            return
+        if amount < 0:
+            raise ValueError("Energy consumption must be positive.")
+        self._battery_level -= amount
+        self._logger.info(f"Consumed {amount} energy. Battery level is now {self._battery_level}.")
+
+    def recharge(self, amount: float) -> None:
+        """
+        Recharge the robot's battery.
+        
+        Args:
+            amount (float): The amount of energy to recharge.
+        """
+        if not self._is_active:
+            self._logger.warning("Robot is inactive, cannot recharge.")
+            return
+        if amount < 0:
+            raise ValueError("Recharge amount must be positive.")
+        self._battery_level += amount
+        if self._battery_level > 100:
+            self._battery_level = 100
+        self._logger.info(f"Recharged {amount} energy. Battery level is now {self._battery_level}.")
+        if self._battery_level <= 0:
+            self._is_active = False
+            self._logger.warning("Battery depleted: robot deactivated.")
+        self._logger.info(f"Robot {self.name} is now {'active' if self.is_active else 'inactive'}.")
+
+    def add_sensor(self, sensor: Any) -> None:
+        """
+        Add a sensor to the robot.
+        
+        Args:
+            sensor (Any): The sensor to add.
+        """
+        if sensor not in self._sensors:
+            self._sensors.append(sensor)
+            self._logger.info(f"Sensor {sensor} added to robot {self.name}.")
+        else:
+            self._logger.warning(f"Sensor {sensor} is already attached to robot {self.name}.")
+
+    def remove_sensor(self, sensor: Any) -> None:
+        """
+        Remove a sensor from the robot.
+        
+        Args:
+            sensor (Any): The sensor to remove.
+        """
+        if sensor in self._sensors:
+            self._sensors.remove(sensor)
+            self._logger.info(f"Sensor {sensor} removed from robot {self.name}.")
+        else:
+            self._logger.warning(f"Sensor {sensor} not found on robot {self.name}.")
 
     def __str__(self) -> str:
-        return self.status_base()
-
+        """
+        Return a string representation of the robot.
+        
+        Returns:
+            str: A string containing the robot's ID, name, position, orientation, energy source, and active status.
+        """
+        return self.status()
+    
     def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} {self.status_base()}>"
-
+        """
+        Return a detailed string representation of the robot for debugging.
+        
+        Returns:
+            str: A string containing the class name and the robot's attributes.
+        """
+        return (f"{self.__class__.__name__}(ID={self.id}, Name={self.name}, "
+                f"Position={self.position}, Orientation={self.orientation}, "
+                f"Energy Source={self.energy_source}, Active={self.is_active})")
+    
     def __eq__(self, other: object) -> bool:
+        """
+        Check if two robots are equal based on their ID.
+        
+        Args:
+            other (object): The object to compare with.
+        
+        Returns:
+            bool: True if the IDs are the same, False otherwise.
+        """
         if not isinstance(other, Robot):
             return NotImplemented
-        return self._id == other._id
+        return self.id == other.id
+    
+    
