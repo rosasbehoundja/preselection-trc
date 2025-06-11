@@ -76,4 +76,4 @@ Test 1/
 
 The following diagram reflects the actual class structure and main methods:
 
-![UML Class Diagram](media/diagram.png)`
+![UML Class Diagram](../media/diagram.png)
