@@ -9,7 +9,6 @@ class State(Enum):
     IDLE = "IDLE"
     NAVIGATING = "NAVIGATING"
     AVOIDING = "AVOIDING"
-    WAITING_FOR_ARM = "WAITING_FOR_ARM"
     UPDATING_STORAGE = "UPDATING_STORAGE"
     RETURNING = "RETURNING"
     CHARGING = "CHARGING"
@@ -37,9 +36,14 @@ class WheeledRobot(Robot):
             name (str): Name of the robot.
             position (Tuple[float, float]): Initial position (x, y) in meters.
             orientation (float): Initial orientation in radians.
-            energy_source (str): Type of energy source (e.g., "battery").
+            energy_source (str): The energy source used by the robot, must be one of the ENERGY_SOURCE list.
             wheel_base (float): Distance between the wheels in meters.
             storage_capacity (int): Maximum number of items the robot can store.
+
+        ENERGY_SOURCE is a list of valid energy sources:
+            - "solar"
+            - "fossil_fuel"
+            - "electric"
 
         Raises:
             ValueError: If wheel_base is not positive and storage_capacity is not positive.
@@ -105,14 +109,6 @@ class WheeledRobot(Robot):
         self._state = new_state
         self._logger.info(f"State changed to {self._state.value}")
 
-    @storage_bag.setter
-    def storage_bag(self, item: Any) -> None:
-        """Add an item to the storage bag."""
-        if len(self._storage_bag) >= self._stockage_capacity:
-            raise ValueError("Storage bag is full.")
-        self._storage_bag.append(item)
-        self._logger.info(f"Item added to storage bag. Current count: {len(self._storage_bag)}")
-
     @obstacle_threshold.setter
     def obstacle_threshold(self, threshold: float) -> None:
         """Set the obstacle detection threshold."""
@@ -121,8 +117,7 @@ class WheeledRobot(Robot):
         self._obstacle_threshold = float(threshold)
         self._logger.info(f"Obstacle threshold set to {self._obstacle_threshold:.2f} meters")
     
-
-    # Motors and sensors
+    # Personalized methods for WheeledRobot
     def set_motor_speed(self, left: float, right: float) -> None:
         """
         Define motors speeds for left and right wheels.
@@ -142,6 +137,24 @@ class WheeledRobot(Robot):
         self._v_ang_cmd = (right - left) / self.wheel_base
         self._logger.info(f"Motors set: v={self._v_lin_cmd:.2f}, ω={self._v_ang_cmd:.2f}")
 
+    def add_to_storage(self, item: Any) -> bool:
+        """
+        Add an item to the robot's storage bag.
+        
+        Args:
+            item (Any): The item to be added.
+        
+        Returns:
+            bool: True if the item was added, False if storage is full.
+        """
+        if len(self._storage_bag) >= self._stockage_capacity:
+            self._logger.warning("Storage is full, cannot add item.")
+            return False
+        self.state = State.UPDATING_STORAGE
+        self._storage_bag.append(item)
+        self._logger.info(f"Item added to storage. Current count: {len(self._storage_bag)}")
+        return True
+
     def move(self, direction: str, distance: float) -> None:
         if not self.is_active:
             self._logger.warning("Cannot move: Robot is inactive.")
@@ -155,7 +168,8 @@ class WheeledRobot(Robot):
             self._logger.error("Invalid move direction. Use 'forward', 'backward'")
             raise ValueError("move direction must be 'forward', 'backward'.")
 
-        angle = self._orientation if direction == "forward" else self._orientation + math.pi
+        self.state = State.NAVIGATING
+        angle = self.orientation if direction == "forward" else self.orientation + math.pi
 
         # Compute new position based on distance and angle
         dx = distance * math.cos(angle)
@@ -185,145 +199,54 @@ class WheeledRobot(Robot):
         self.is_active = False
         self._logger.info("Robot stopped.")
 
-    def detect_obstacle(self) -> bool:
+    def detect_obstacle(self, obstacle_position: Tuple[float, float]) -> bool:
         """
-        Vérifie si un obstacle est trop proche via les capteurs.
-        Retourne True si au moins un capteur lit < threshold.
+        Check if an obstacle is detected within the threshold distance.
         """
-        dists = self.read_sensors()
-        for d in dists:
-            if d is not None and d < self._obstacle_threshold:
-                self._logger.info(f"Obstacle detected at distance {d:.2f}m")
-                return True
+        if not isinstance(obstacle_position, tuple) or len(obstacle_position) != 2:
+            raise ValueError("obstacle_position must be a tuple (x, y).")
+        
+        distance = self.distance_to(obstacle_position)
+        if distance < self._obstacle_threshold:
+            self._logger.info(f"Obstacle detected at {obstacle_position} (distance: {distance:.2f}m)")
+            return True
         return False
 
     def avoid_obstacle(self) -> bool:
-        """
-        Stratégie simple de contournement :
-        - Stoppe,
-        - Recule un peu,
-        - Tourne de 45 degrés,
-        - Avance un peu,
-        - Puis retourne True pour signaler manœuvre effectuée.
-        """
-        self._logger.info("Avoiding obstacle...")
-        try:
-            self.stop()
-            self.move("backward", 0.2)
-            self.rotate(math.pi / 4)
-            self.move("forward", 0.3)
-        except RuntimeError as e:
-            self._logger.warning(f"Obstacle avoidance failed: {e}")
+        """Avoid an obstacle by rotating and moving around it."""
+        if not self.is_active:
+            self._logger.warning("Cannot avoid obstacle: Robot is inactive.")
             return False
-        self._logger.info("Obstacle avoidance maneuver done.")
+        
+        self.rotate(math.pi / 2)  # Rotate 90 degrees
+        self.move("forward", 0.5)  # Move forward 0.5 meters
+        self._logger.info("Obstacle avoided by rotating and moving forward.")
         return True
-
-    def navigate_to(self, target: Tuple[float, float]) -> bool:
-        """
-        Planifie et suit une trajectoire vers target (x, y).
-        Retourne True si arrivé, False si interrompu (batterie faible ou obstacle infranchissable).
-        """
-        # Vérifie actif & batterie
-        if not self.is_active or (hasattr(self, "battery_level") and self.battery_level <= self._battery_low_threshold):
-            self._logger.warning("Cannot navigate: inactive or battery low.")
-            return False
-
-        path = self._planner.compute_path(self._position, target)
-        for waypoint in path:
-            # Boucle jusqu'à atteindre le waypoint
-            while True:
-                # Obstacle ?
-                if self.detect_obstacle():
-                    ok = self.avoid_obstacle()
-                    if not ok:
-                        self._logger.warning("Cannot avoid obstacle, abort navigation.")
-                        return False
-                # Calcul vecteur vers waypoint
-                dx = waypoint[0] - self._position[0]
-                dy = waypoint[1] - self._position[1]
-                dist = math.hypot(dx, dy)
-                if dist < 0.05:
-                    break  # waypoint atteint
-                # Orientation souhaitée
-                desired_angle = math.atan2(dy, dx)
-                # Calcul de la différence d'angle dans [-π, π]
-                angle_diff = (desired_angle - self._orientation + math.pi) % (2 * math.pi) - math.pi
-                if abs(angle_diff) > 0.1:
-                    # Tourne par pas
-                    step = max(min(angle_diff, 0.3), -0.3)
-                    try:
-                        self.rotate(step)
-                    except RuntimeError:
-                        return False
-                else:
-                    # Avance vers waypoint
-                    step_dist = min(dist, 0.2)
-                    try:
-                        self.move("forward", step_dist)
-                    except RuntimeError:
-                        return False
-                # Vérifier batterie en cours de route
-                if not self.is_active or (hasattr(self, "battery_level") and self.battery_level <= self._battery_low_threshold):
-                    self._logger.warning("Battery too low mid-navigation.")
-                    return False
-            # waypoint atteint
-        self._logger.info(f"Arrived at target {target}")
-        return True
-
-    # ---------- Coordination avec le bras ----------
-
-    def prepare_for_pickup(self, cube_pos: Tuple[float, float]) -> bool:
-        """
-        Positionne le robot pour que le bras puisse saisir le cube.
-        cube_pos est la position absolue dans l'arène.
-        """
-        # Orientation vers le cube
-        dx = cube_pos[0] - self._position[0]
-        dy = cube_pos[1] - self._position[1]
-        desired_angle = math.atan2(dy, dx)
-        angle_diff = (desired_angle - self._orientation + math.pi) % (2 * math.pi) - math.pi
-        try:
-            self.rotate(angle_diff)
-            # Approche jusqu'à distance de prise (ex. 0.3 m)
-            dist_to_cube = math.hypot(dx, dy)
-            approach_dist = max(dist_to_cube - 0.3, 0.0)
-            if approach_dist > 0:
-                self.move("forward", approach_dist)
-        except RuntimeError:
-            self._logger.warning("Failed to position for pickup.")
-            return False
-        # S'assurer que la plateforme est immobile
-        self.stop()
-        self._logger.info("Positioned for pickup.")
-        return True
-
-    def resume_after_pickup(self):
-        """
-        Réinitialise l'état pour reprendre navigation.
-        """
-        self._logger.info("Resuming navigation after pickup.")
-        # Aucun code spécifique ; la machine à états reprendra la navigation.
-
-    def add_cube_to_storage(self, cube_info: Any) -> bool:
-        """
-        Appelé après succès du pick par le bras.
-        """
-        success = self._storage.add(cube_info)
-        if success:
-            self._logger.info(f"Cube ajouté au stockage ({self._storage.count()}/{self._storage._capacity}).")
-        else:
-            self._logger.warning("Stockage plein, cube non ajouté.")
-        return success
 
     def is_storage_full(self) -> bool:
-        return self._storage.is_full()
-
-    def return_to_sorting_zone(self, sort_zone_pos: Tuple[float, float]) -> bool:
+        """Check if the storage bag is full."""
+        full = len(self._storage_bag) >= self._stockage_capacity
+        if full:
+            self._logger.warning("Storage is full.")
+        return full
+    
+    def status(self) -> str:
         """
-        Lance la navigation vers la zone de tri.
+        Get the current status of the robot.
+        Returns:
+            str: A string describing the robot's status.
         """
-        self._logger.info("Returning to sorting zone.")
-        return self.navigate_to(sort_zone_pos)
+        status = (
+            f"Robot '{self.name}' Status:\n"
+            f"Position: {self.position}\n"
+            f"Orientation: {self.orientation:.2f} radians\n"
+            f"Energy Level: {self.generator_level:.2f}\n"
+            f"State: {self.state.value}\n"
+            f"Storage Capacity: {len(self._storage_bag)}/{self._stockage_capacity}\n"
+            f"Linear Speed Command: {self._v_lin_cmd:.2f} m/s\n"
+            f"Angular Speed Command: {self._v_ang_cmd:.2f} rad/s\n"
+        )
+        return status
 
     # Protected methods for internal use
     def _consume_for_motion(self, distance: float) -> None:
@@ -347,5 +270,5 @@ class WheeledRobot(Robot):
         """
         Consume energy proportionally to the rotation.
         """
-        amount = abs(angle) * 0.002  # ex. 0.002% per degrees
+        amount = abs(angle) * 0.002  # 0.002% per degree
         self.consume_energy(amount)

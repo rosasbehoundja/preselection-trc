@@ -207,8 +207,17 @@ class Robot(ABC):
                 f"Orientation: {self.orientation}, Energy Source: {self.energy_source}, "
                 f"Active: {self.is_active}), Generator Level: {self.generator_level}")
     
-    @abstractmethod
-    def distance_to(self, *args: float) -> float:
+    def start(self) -> None:
+        """
+        Start the robot's operations.
+        """
+        if self._generator_level <= 0:
+            self._logger.warning("Cannot start: Generator level is zero.")
+            return
+        self.is_active = True
+        self._logger.info(f"Robot {self.name} started.")
+
+    def distance_to(self, other: Tuple[float, float]) -> float:
         """
         Calculate the distance from the robot to another point.
 
@@ -219,7 +228,7 @@ class Robot(ABC):
             float: The distance to the other point.
         """
         x0, y0 = self.position
-        x1, y1 = args
+        x1, y1 = other
         return math.hypot(x1 - x0, y1 - y0)
 
     # Personalized methods for Robot
@@ -230,8 +239,8 @@ class Robot(ABC):
             return
         if amount < 0:
             raise ValueError("Energy consumption must be positive.")
-        self._battery_level -= amount
-        self._logger.info(f"Consumed {amount} energy. Battery level is now {self._battery_level}.")
+        self._generator_level -= amount
+        self._logger.info(f"Consumed {amount} energy. Generator level is now {self._generator_level}.")
 
     def add_sensor(self, sensor: Any) -> None:
         """

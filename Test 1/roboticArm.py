@@ -1,5 +1,5 @@
 from robot import Robot
-from typing import Tuple, Union, List
+from typing import Tuple, List, Optional
 import math
 
 
@@ -25,6 +25,8 @@ class RoboticArm(Robot):
             raise ValueError("A robotic arm must have at least 2 joints.")
         self._joint_angles: List[float] = [0.0] * num_joints  # Angles in degrees
         self._num_joints = num_joints
+        self._end_effector_position: Tuple[float, float] = position
+        self._holding_item: Optional[str] = None
 
     # Properties for the robotic arm
     @property
@@ -36,11 +38,19 @@ class RoboticArm(Robot):
     def num_joints(self) -> int:
         return self._num_joints
     
+    @property
+    def end_effector_position(self) -> Tuple[float, float]:
+        return self._end_effector_position
+
+    @property
+    def holding_item(self) -> Optional[str]:
+        return self._holding_item
+    
     @joint_angles.setter
     def joint_angles(self, angles: List[float]) -> None:
         if not isinstance(angles, list) or len(angles) != self._num_joints or not all(isinstance(a, (int, float)) for a in angles):
             raise ValueError(f"Angles must be a list of {self._num_joints} numeric values.")
-        self._joint_angles = [float(a) for a in angles]
+        self._joint_angles = [float(a % 360) for a in angles]
         self._logger.info(f"Joint angles updated: {self._joint_angles}")
 
     # Personalized methods for RoboticArm
@@ -56,8 +66,9 @@ class RoboticArm(Robot):
         
         angle = math.degrees(math.atan2(target_position[1] - self.position[1], target_position[0] - self.position[0]))
         self._joint_angles = [angle / self._num_joints] * self._num_joints
-        self.position = target_position
-        self._logger.info(f"Moved end effector to {self.position} with joint angles {self._joint_angles}")
+        self._end_effector_position = target_position
+        self.consume_energy(1.0)
+        self._logger.info(f"Moved end effector to {target_position} with joint angles {self._joint_angles}")
 
     def rotate(self, joint_index: int, angle: float) -> None:
         """
@@ -70,33 +81,22 @@ class RoboticArm(Robot):
             raise IndexError("Invalid joint index.")
         
         self._joint_angles[joint_index] = (self._joint_angles[joint_index] + angle) % 360
-        self.orientation = (self.orientation + angle) % 360
-        self._logger.info(f"Rotated joint {joint_index} by {angle} degrees. New angle: {self._joint_angles[joint_index]}")
+        self.orientation = (math.degrees(self.orientation) + angle) % 360
+        self.consume_energy(0.1)
+        self._logger.info(f"Rotated joint {joint_index} by {angle} radians. New angle: {self._joint_angles[joint_index]}")
 
     def stop(self) -> None:
         """
         Stop all movements of the robotic arm.
         """
         self.is_active = False
-        self._joint_angles = [0.0] * self._num_joints  # Reset joint angles
         self._logger.info("Robotic arm stopped.")
 
     def status(self) -> str:
-        """
-        Get the current status of the robotic arm.
-        """
         return (f"RoboticArm(ID: {self.id}, Name: {self.name}, Position: {self.position}, "
-                f"Orientation: {self.orientation}, Joints: {self._joint_angles}, "
+                f"End-Effector: {self._end_effector_position}, Orientation: {self.orientation:.2f} rad, "
+                f"Joints: {self._joint_angles}, Holding: {self._holding_item}, "
                 f"Active: {self.is_active}, Generator level: {self.generator_level})")
-
-    def distance_to(self, x: float, y: float) -> float:
-        """
-        Calculate the distance from the end effector to a target point.
-        """
-        if not isinstance(x, (int, float)) or not isinstance(y, (int, float)):
-            raise ValueError("Coordinates must be numeric values.")
-        ex, ey = self.position
-        return math.hypot(x - ex, y - ey)
 
     def set_joint_angle(self, joint_index: int, angle: float) -> None:
         """
@@ -116,35 +116,34 @@ class RoboticArm(Robot):
 
     def pick(self, item: str) -> None:
         """
-        Pick up an item with the robotic arm.
-        """
+        Pick up an item with the robotic arm's end effector."""
         if not self.is_active:
             self._logger.warning(f"Cannot pick {item}: Robotic arm is inactive.")
             return
-        print(f"{self.name} is picking up {item} at {self.position}.")
-        self._logger.info(f"Picked up {item} at {self.position}.")
+        if self._holding_item is not None:
+            self._logger.warning(f"Already holding {self._holding_item}, cannot pick {item}.")
+            return
+        self._holding_item = item
+        self.consume_energy(0.5)
+        self._logger.info(f"Picked up {item} at {self._end_effector_position}.")
 
     def place(self, item: str, target_position: Tuple[float, float]) -> None:
         """
-        Place an item at a target position with the robotic arm.
+        Place the currently held item at a target position or Storage Bag.
         """
         if not self.is_active:
             self._logger.warning(f"Cannot place {item}: Robotic arm is inactive.")
             return
+        if self._holding_item != item:
+            self._logger.warning(f"Cannot place {item}: Not currently holding it.")
+            return
         self.move(target_position)
-        print(f"{self.name} placed {item} at {target_position}.")
+        self._holding_item = None
+        self.consume_energy(0.5)
         self._logger.info(f"Placed {item} at {target_position}.")
 
-if __name__ == "__main__":
-    # Example usage of the RoboticArm class
-    arm = RoboticArm(id=1, name="Arm1", position=(0.0, 0.0), orientation=0.0, energy_source="Electric")
-    arm.move((5.0, 5.0))
-    arm.rotate(0, 45)
-    arm.pick("Box")
-    arm.place("Box", (10.0, 10.0))
-    print(arm.status())
-    arm.reset_arm()
-    print(arm.status())
-    arm.stop()
-    arm.set_joint_angle(1, 90)
-    print(arm.joint_angles)
+    def reset_arm(self) -> None:
+        self._joint_angles = [0.0] * self._num_joints
+        self._end_effector_position = self.position
+        self._holding_item = None
+        self._logger.info("Robotic arm reset to home position.")
