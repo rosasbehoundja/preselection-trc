@@ -107,16 +107,10 @@ class RoboticArm(Robot):
         self._joint_angles[joint_index] = angle % 360
         self._logger.info(f"Set joint {joint_index} to {angle} degrees.")
 
-    def reset_arm(self) -> None:
-        """
-        Reset all joint angles to zero and move end effector to base position.
-        """
-        self._joint_angles = [0.0] * self._num_joints
-        self._logger.info("Robotic arm reset to home position.")
-
     def pick(self, item: str) -> None:
         """
-        Pick up an item with the robotic arm's end effector."""
+        Pick up an item with the robotic arm's end effector.
+        """
         if not self.is_active:
             self._logger.warning(f"Cannot pick {item}: Robotic arm is inactive.")
             return
