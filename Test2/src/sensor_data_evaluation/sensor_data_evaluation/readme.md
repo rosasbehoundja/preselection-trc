@@ -20,6 +20,10 @@ Node ROS2 qui publie des mesures aléatoires de température (15–35 °C), hu
 ```bash
 ros2 run sensor_data_evaluation sensor_publisher
 ```
+ou
+```bash
+python sensor_publisher.py
+```
 
 ---
 
@@ -65,4 +69,8 @@ Node ROS2 qui souscrit au topic `/sensor_data`, vérifie les plages des mesures,
 **Usage :**
 ```bash
 ros2 run sensor_data_evaluation sensor_subscriber
+```
+ou
+```bash
+python sensor_subscriber.py
 ```
