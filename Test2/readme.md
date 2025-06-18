@@ -30,7 +30,7 @@ Test2/
 ## Documentation
 
 - [`Documentation sensor_publisher et sensor_subscriber`](src/sensor_data_evaluation/sensor_data_evaluation/readme.md)
-- [`Documentation sensor_launch`](src/sensor_data_evaluation/launch/)
+- [`Documentation sensor_launch`](src/sensor_data_evaluation/launch/readme.md)
 
 ---
 
