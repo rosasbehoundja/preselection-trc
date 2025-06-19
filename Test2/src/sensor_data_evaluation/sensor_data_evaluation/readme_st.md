@@ -1,5 +1,7 @@
 # Interface Web – `streamlit_app.py`
 
+<img src="https://github.com/rosasbehoundja/preselection-trc/blob/main/media/general.png" alt="General">
+
 ## Description générale
 
 Cette application Streamlit sert de **dashboard en temps réel** pour la visualisation des données issues de capteurs ROS2 (température, humidité, pression).  
