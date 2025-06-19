@@ -97,5 +97,6 @@ def main(args=None):
 ## Commande d’exécution
 
 ```bash
+source install/setup.bash
 ros2 run sensor_data_evaluation sensor_publisher
 ```
