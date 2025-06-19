@@ -27,13 +27,6 @@ Test2/
 ```
 ---
 
-## Documentation
-
-- [`Documentation sensor_publisher et sensor_subscriber`](src/sensor_data_evaluation/sensor_data_evaluation/readme.md)
-- [`Documentation sensor_launch`](src/sensor_data_evaluation/launch/readme.md)
-
----
-
 ## Compilation et exécution rapide
 
 ### 1. Compilation
@@ -66,3 +59,12 @@ ros2 launch sensor_data_evaluation sensor_launch.py
 cd src/sensor_data_evaluation/sensor_data_evaluation/
 streamlit run streamlit_app.py
 ```
+
+---
+
+## Documentation
+
+- [`sensor_publisher`](src/sensor_data_evaluation/sensor_data_evaluation/readme_P.md)
+- [`sensor_subscriber`](src/sensor_data_evaluation/sensor_data_evaluation/readme_S.md)
+- [`sensor_launch`](src/sensor_data_evaluation/launch/readme.md)
+- [`app streamlit`](src/sensor_data_evaluation/sensor_data_evaluation/readme_st.md)
