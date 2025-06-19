@@ -16,21 +16,34 @@ Elle propose également des **interactions via une sidebar** permettant de contr
 
 - Bouton **Démarrer / Arrêter** l’affichage des nouvelles données.
 - **Effacement de l’historique** en un clic.
+
+  <img src="https://github.com/rosasbehoundja/preselection-trc/blob/main/media/affichage_historique.png" alt="Bouton Démarrer / Arrêter et Effacement de l’historique" width="200" height="150">
+
+  
 - **Configuration dynamique des seuils d’alerte** (via sliders) pour chaque capteur :
   - Température (°C)
+    
   - Humidité (%)
   - Pression (hPa)
+
+  <img src="https://github.com/rosasbehoundja/preselection-trc/blob/main/media/seuil.png" alt="Seuils d’alerte" width="268" height="469">
+  
 - Options de **rafraîchissement** :
   - Activation / désactivation de l'auto-refresh
+    
   - Choix de l’intervalle (1s, 2s, 5s, 10s)
   - Bouton “🔄 Actualiser maintenant”
+
+  <img src="https://github.com/rosasbehoundja/preselection-trc/blob/main/media/actualisation.png" alt="rafraîchissement" width="291" height="218">
     
 - **Instructions rapides** pour l’utilisateur.
 - **État du système** affiché en temps réel :
   - Statut d’affichage
+    
   - Nombre de mesures reçues
   - Compteur de refreshs
 
+  <img src="https://github.com/rosasbehoundja/preselection-trc/blob/main/media/etat_systeme.png" alt="État du système" width="192" height="181">
 ---
 
 ### 2. **Affichage en temps réel (cartes métriques)**
@@ -46,7 +59,11 @@ Chaque carte affiche :
 - Icône
 - État de conformité vis-à-vis des seuils d'alerte (`✅` ou `⚠️`)
 
+![Affichage en temps réel/ Normal](https://github.com/rosasbehoundja/preselection-trc/blob/main/media/dash_normal.png)
+  
 > 💡 En cas de dépassement des seuils, la carte clignote et un message d'erreur s’affiche.
+
+![Affichage en temps réel / Hors plage](https://github.com/rosasbehoundja/preselection-trc/blob/main/media/dash_pb.png)
 
 ---
 
@@ -62,6 +79,8 @@ Deux types d’alertes sont affichées :
 
 Un indicateur donne la **date et l’heure** de la dernière mesure reçue et affichée.
 
+![Dernière mise à jour](https://github.com/rosasbehoundja/preselection-trc/blob/main/media/update_time.png)
+
 ---
 
 ### 5. **Onglets dynamiques**
@@ -72,15 +91,21 @@ Un indicateur donne la **date et l’heure** de la dernière mesure reçue et af
 - Données historisées jusqu’à 100 mesures
 - Graphiques interactifs : zoom, survol, export
 
+![Graphiques](https://github.com/rosasbehoundja/preselection-trc/blob/main/media/plotly.png)
+
 #### 📋 **Historique**
 - Tableau des **20 dernières mesures**
 - Affichage formaté : arrondi à 2 décimales, horodatage simplifié
 - Présence d’indicateurs de validation (`temp_ok`, `hum_ok`, `pres_ok`)
 
+![Historique](https://github.com/rosasbehoundja/preselection-trc/blob/main/media/history_20.png)
+
 #### 📊 **Statistiques**
 - Moyenne, min et max pour chaque capteur
 - Affichage clair dans 3 colonnes
 - Mise à jour automatique à chaque ajout de donnée
+
+![Statistiques](https://github.com/rosasbehoundja/preselection-trc/blob/main/media/stat.png)
 
 ---
 
