@@ -61,5 +61,6 @@ def generate_launch_description():
 
 ## Commande d’exécution
 ```bash
+source install/setup.bash
 ros2 launch sensor_data_evaluation sensor_launch.py
 ```
